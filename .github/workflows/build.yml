@@ -1,15 +1,21 @@
+
 name: Build Mahnashan Pack APK
 
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches:
+      - main
+
+permissions:
+  contents: read
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Setup Java
@@ -22,25 +28,37 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
+          cache: true
 
-      - name: Extract project
+      - name: Extract project ZIP
         run: |
-          mkdir extracted
+          mkdir -p extracted
           unzip -q ./*.zip -d extracted
 
-      - name: Find Flutter project
+      - name: Locate Flutter project
         run: |
           PROJECT=$(find extracted -name pubspec.yaml -print -quit)
-          echo "PROJECT_DIR=$(dirname "$PROJECT")" >> $GITHUB_ENV
+          if [ -z "$PROJECT" ]; then
+            echo "Flutter project not found"
+            exit 1
+          fi
+          echo "PROJECT_DIR=$(dirname "$PROJECT")" >> "$GITHUB_ENV"
 
-      -       - name: Build APK
+      - name: Generate Android project files
         run: |
           cd "$PROJECT_DIR"
-          sed -i 's/gradle-8.4/gradle-8.14/g' android/gradle/wrapper/gradle-wrapper.properties
+          rm -rf android
+          flutter create --platforms=android --org com.mahnashan.pack --project-name mahnashan_pack .
+
+      - name: Build release APK
+        run: |
+          cd "$PROJECT_DIR"
           flutter pub get
           flutter build apk --release
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: Mahnashan-Pack-APK
-          path: extracted/**/build/app/outputs/flutter-apk/app-release.apk
+          path: extracted/mahnashan_pack_flutter/build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
